@@ -24,7 +24,7 @@ Możesz **włączać/wyłączać** poszczególne czujniki, komentując lub odkom
 
 1. HACS → Integracje → ⋮ → Dodaj repozytorium
 2. Wklej: https://github.com/sza86/hacs-ensolarx
-3. Typ: Integracja → Dodaj → Zainstaluj → Restart HA
+3. Typ: Ustawienia → Urządzenia → Integracja → Dodaj → Zainstaluj → Restart HA
 
 ### Ręczna
 

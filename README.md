@@ -30,7 +30,7 @@ Możesz **włączać/wyłączać** poszczególne czujniki, komentując lub odkom
 
 1. Pobierz ZIP
 2. Skopiuj do `config/custom_components/ensolarx/`
-3. Restart HA → Dodaj integrację → EnsolarX
+3. Restart HA → Ustawienia → Urządzenia → Dodaj integrację → EnsolarX
 
 ## 📜 Licencja
 

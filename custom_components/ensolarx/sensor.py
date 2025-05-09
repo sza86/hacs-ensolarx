@@ -1,14 +1,22 @@
+from homeassistant.components.sensor import SensorDeviceClass
+from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
+from homeassistant.components.sensor import SensorStateClass
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.const import CONF_HOST, CONF_PORT
 from datetime import timedelta
 from pymodbus.client import AsyncModbusTcpClient
 from pymodbus.exceptions import ModbusIOException
-from asyncio import sleep, Lock
+from asyncio import sleep, Lock, Queue, TimeoutError
+import async_timeout
 import logging
 
+from .const import SENSORS
+
 _LOGGER = logging.getLogger(__name__)
+
 modbus_lock = Lock()
+read_queue = Queue()
 
 # --- Parsery ---
 def parse_protocol(val):
@@ -158,7 +166,6 @@ SENSORS = [
 
 ]
 
-
 class EnsolarXSensor(SensorEntity):
     def __init__(self, sensor_config: dict, client: AsyncModbusTcpClient, slave_id: int):
         self._client = client
@@ -174,9 +181,33 @@ class EnsolarXSensor(SensorEntity):
 
         self._attr_name = self._name
         self._attr_unique_id = f"ensolarx_{self._address}"
-        self._attr_device_class = None
         self._attr_native_unit_of_measurement = self._unit
         self._attr_native_value = None
+
+        # Przypisz state_class tylko dla typów liczbowych
+        if (
+            self._data_type in ("uint16", "int16", "uint32", "int32", "float", "float16", "float32")
+            and self._parser is None
+        ):
+            self._attr_state_class = SensorStateClass.MEASUREMENT
+        else:
+            self._attr_state_class = None
+
+
+        # Można dodać device_class tylko jeśli ma sens (np. energia, moc, napięcie)
+        if self._unit == "W":
+            self._attr_device_class = SensorDeviceClass.POWER
+        elif self._unit in ("Wh", "kWh"):
+            self._attr_device_class = SensorDeviceClass.ENERGY
+        elif self._unit == "V":
+            self._attr_device_class = SensorDeviceClass.VOLTAGE
+        elif self._unit == "A":
+            self._attr_device_class = SensorDeviceClass.CURRENT
+        elif self._unit == "°C":
+            self._attr_device_class = SensorDeviceClass.TEMPERATURE
+        else:
+            self._attr_device_class = None
+
         self._attr_device_info = {
             "identifiers": {("ensolarx", "ensolarx")},
             "name": "EnsolarX",
@@ -184,29 +215,24 @@ class EnsolarXSensor(SensorEntity):
             "model": "HEMS",
             "sw_version": "Modbus v1.0",
         }
-
-    async def async_update(self):
+    async def _safe_update(self):
         try:
             async with modbus_lock:
-                response = await self._client.read_holding_registers(
-                    address=self._address, count=1, slave=self._slave_id
-                )
-        except Exception as e:
-            _LOGGER.warning(f"[{self._name}] Błąd odczytu: {e}. Próba ponownego połączenia...")
-            try:
-                await self._client.close()
-            except Exception:
-                pass
-            try:
-                await self._client.connect()
-                await sleep(1)
-                async with modbus_lock:
+                if not self._client.connected:
+                    _LOGGER.warning(f"[{self._name}] Klient rozłączony, próbuję połączyć...")
+                    await self._client.connect()
+                    await sleep(0.5)
+
+                async with async_timeout.timeout(5):
                     response = await self._client.read_holding_registers(
                         address=self._address, count=1, slave=self._slave_id
                     )
-            except Exception as reconnect_error:
-                _LOGGER.error(f"[{self._name}] Reconnect nieudany: {reconnect_error}")
-                return
+        except TimeoutError:
+            _LOGGER.error(f"[{self._name}] Timeout przy odczycie Modbus")
+            return
+        except Exception as e:
+            _LOGGER.exception(f"[{self._name}] Błąd podczas odczytu: {e}")
+            return
 
         if response and hasattr(response, "registers"):
             val = response.registers[0]
@@ -224,7 +250,6 @@ class EnsolarXSensor(SensorEntity):
         else:
             _LOGGER.warning(f"[{self._name}] Brak danych z adresu {self._address}")
 
-
 async def async_setup_entry(hass, entry, async_add_entities):
     host = entry.data.get(CONF_HOST, "192.168.86.188")
     port = entry.data.get(CONF_PORT, 8899)
@@ -238,14 +263,21 @@ async def async_setup_entry(hass, entry, async_add_entities):
     async_add_entities(sensors)
     _LOGGER.info(f"✅ Dodano {len(sensors)} sensorów EnsolarX")
 
-    async def update_all(now):
-        _LOGGER.debug("🔁 Start update_all")
-        for i, sensor in enumerate(sensors, start=1):
+    async def modbus_worker():
+        while True:
+            sensor = await read_queue.get()
             try:
-                await sensor.async_update()
+                await sensor._safe_update()
                 sensor.async_write_ha_state()
             except Exception as err:
                 _LOGGER.warning(f"[{sensor._name}] Błąd aktualizacji: {err}")
-            await sleep(0.5 if i % 10 == 0 else 0.2)
+            await sleep(0.1)
+            read_queue.task_done()
 
+    async def update_all(now):
+        _LOGGER.debug("🔁 Start update_all")
+        for sensor in sensors:
+            await read_queue.put(sensor)
+
+    hass.loop.create_task(modbus_worker())
     async_track_time_interval(hass, update_all, timedelta(seconds=update_interval))

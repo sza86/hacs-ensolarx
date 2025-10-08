@@ -1,0 +1,10 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to EnX Modbus",
+        "description": "Enter host/port and Unit ID (slave)."
+      }
+    }
+  }
+}

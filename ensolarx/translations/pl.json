@@ -1,0 +1,16 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "EnX Modbus",
+        "description": "Połącz z falownikiem ENSolarX/EnX przez Modbus TCP.",
+        "data": {
+          "host": "Adres IP",
+          "port": "Port TCP",
+          "slave_id": "Slave ID",
+          "scan_interval": "Interwał odczytu (s)"
+        }
+      }
+    }
+  }
+}

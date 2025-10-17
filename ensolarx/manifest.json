@@ -1,0 +1,12 @@
+{
+  "domain": "ensolarx",
+  "name": "EnsolarX (Modbus TCP)",
+  "version": "0.3.0",
+  "documentation": "https://example.local/ensolarx",
+  "issue_tracker": "https://example.local/ensolarx/issues",
+  "iot_class": "local_polling",
+  "requirements": [],
+  "codeowners": ["@you"],
+  "config_flow": true,
+  "loggers": ["custom_components.ensolarx"]
+}

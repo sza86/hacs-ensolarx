@@ -1,9 +1,8 @@
 {
-    "name": "EnsolarX",
-    "content_in_root": false,
-    "domains": ["sensor"],
-    "country": "PL",
-    "homeassistant": "2023.0.0",
-    "render_readme": true
-  }
-  
+  "name": "EnsolarX",
+  "content_in_root": false,
+  "domains": ["ensolarx"],
+  "country": "PL",
+  "homeassistant": "2024.6.0",
+  "render_readme": true
+}
